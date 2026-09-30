@@ -1938,6 +1938,803 @@ render = function(){
 /* ===== 初始更新 ===== */
 
 renderProbability();
+/* ===== V2.0 第4段：50局穩定度與回測 ===== */
+
+
+/* ===== 回測資料 ===== */
+
+let testRecords = [];
+
+let testProfit = 0;
+
+let testPeak = 0;
+
+let testMaxDrawdown = 0;
+
+
+/* ===== 取得目前模型訊號 ===== */
+
+function getCurrentSignal(){
+
+  const analysis =
+    calculateDynamicProbability();
+
+  if(!analysis.ready){
+
+    return {
+      signal:"觀察",
+      p:0,
+      b:0,
+      confidence:0
+    };
+
+  }
+
+  return {
+
+    signal:analysis.signal,
+
+    p:analysis.p,
+
+    b:analysis.b,
+
+    confidence:analysis.confidence
+
+  };
+
+}
+
+
+/* ===== 計算單位結果 ===== */
+
+function calculateTestProfit(
+  signal,
+  winner
+){
+
+  /*
+   * 只有明確方向訊號才進行回測。
+   *
+   * 觀察狀態 = 0
+   *
+   * 這只是統計模型的回測，
+   * 不代表實際下注建議。
+   */
+
+  if(
+    signal !== "偏莊" &&
+    signal !== "偏閒"
+  ){
+
+    return 0;
+
+  }
+
+
+  if(winner === "T"){
+
+    return 0;
+
+  }
+
+
+  if(
+    signal === "偏莊" &&
+    winner === "B"
+  ){
+
+    return 1;
+
+  }
+
+
+  if(
+    signal === "偏閒" &&
+    winner === "P"
+  ){
+
+    return 1;
+
+  }
+
+
+  return -1;
+
+}
+
+
+/* ===== 最大回撤 ===== */
+
+function updateDrawdown(){
+
+  if(testProfit > testPeak){
+
+    testPeak =
+      testProfit;
+
+  }
+
+
+  const drawdown =
+    testPeak -
+    testProfit;
+
+
+  if(
+    drawdown >
+    testMaxDrawdown
+  ){
+
+    testMaxDrawdown =
+      drawdown;
+
+  }
+
+}
+
+
+/* ===== 最近 N 局盈虧 ===== */
+
+function recentProfit(n){
+
+  return testRecords
+    .slice(-n)
+    .reduce(
+      (sum,item)=>
+        sum + item.profit,
+      0
+    );
+
+}
+
+
+/* ===== 計算距離 0 ===== */
+
+function distanceFromZero(){
+
+  return Math.abs(
+    testProfit
+  );
+
+}
+
+
+/* ===== 勝負統計 ===== */
+
+function getTestStats(){
+
+  let wins = 0;
+
+  let losses = 0;
+
+  let neutral = 0;
+
+
+  testRecords.forEach(item=>{
+
+    if(item.profit > 0){
+
+      wins++;
+
+    }
+    else if(item.profit < 0){
+
+      losses++;
+
+    }
+    else{
+
+      neutral++;
+
+    }
+
+  });
+
+
+  return {
+
+    wins,
+
+    losses,
+
+    neutral
+
+  };
+
+}
+
+
+/* ===== 產生穩定度文字 ===== */
+
+function getStabilityText(){
+
+  const count =
+    testRecords.length;
+
+
+  if(count === 0){
+
+    return "尚未開始回測。";
+
+  }
+
+
+  const recent10 =
+    recentProfit(10);
+
+  const recent20 =
+    recentProfit(20);
+
+
+  /*
+   * 這裡不把正數視為問題。
+   *
+   * 只描述目前距離 0 的程度，
+   * 不會強制調整盈虧。
+   */
+
+  if(
+    testMaxDrawdown <= 3 &&
+    Math.abs(recent20) <= 3
+  ){
+
+    return "目前波動位於較小範圍。";
+
+  }
+
+
+  if(
+    testMaxDrawdown <= 5
+  ){
+
+    return "目前仍可觀察，但波動已有增加。";
+
+  }
+
+
+  return "目前波動較大，建議繼續累積樣本。";
+
+}
+
+
+/* ===== 顯示50局統計 ===== */
+
+function renderStability(){
+
+  const box =
+    document.getElementById(
+      "stabilityResult"
+    );
+
+
+  const count =
+    testRecords.length;
+
+
+  if(count === 0){
+
+    box.innerHTML = `
+
+      <strong>50 局穩定度測試</strong>
+
+      <br><br>
+
+      尚未開始。
+
+      <div class="note">
+        每完成一局，系統會更新回測統計。
+      </div>
+
+    `;
+
+    return;
+
+  }
+
+
+  const stats =
+    getTestStats();
+
+
+  const recent10 =
+    recentProfit(10);
+
+
+  const recent20 =
+    recentProfit(20);
+
+
+  const distance =
+    distanceFromZero();
+
+
+  const progress =
+    Math.min(
+      100,
+      count / 50 * 100
+    ).toFixed(0);
+
+
+  const status =
+    getStabilityText();
+
+
+  box.innerHTML = `
+
+    <div style="
+      font-size:20px;
+      font-weight:700;
+    ">
+      ${count} / 50 局
+    </div>
+
+    <div style="
+      margin-top:8px;
+      height:8px;
+      background:#28313d;
+      border-radius:10px;
+      overflow:hidden;
+    ">
+
+      <div style="
+        width:${progress}%;
+        height:100%;
+        background:#64748b;
+      "></div>
+
+    </div>
+
+
+    <div class="stat-grid"
+         style="margin-top:12px">
+
+      <div class="stat">
+
+        <div class="stat-title">
+          累積盈虧
+        </div>
+
+        <div class="stat-value">
+          ${testProfit > 0 ? "+" : ""}
+          ${testProfit}
+        </div>
+
+      </div>
+
+
+      <div class="stat">
+
+        <div class="stat-title">
+          最大回撤
+        </div>
+
+        <div class="stat-value">
+          -${testMaxDrawdown}
+        </div>
+
+      </div>
+
+
+      <div class="stat">
+
+        <div class="stat-title">
+          最近10局
+        </div>
+
+        <div class="stat-value">
+          ${recent10 > 0 ? "+" : ""}
+          ${recent10}
+        </div>
+
+      </div>
+
+
+      <div class="stat">
+
+        <div class="stat-title">
+          最近20局
+        </div>
+
+        <div class="stat-value">
+          ${recent20 > 0 ? "+" : ""}
+          ${recent20}
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div style="
+      margin-top:12px;
+      line-height:1.8;
+    ">
+
+      勝局：
+      <strong>${stats.wins}</strong>
+
+      ／
+
+      負局：
+      <strong>${stats.losses}</strong>
+
+      ／
+
+      觀察／和局：
+      <strong>${stats.neutral}</strong>
+
+      <br>
+
+      距離 0：
+      <strong>${distance}</strong>
+
+    </div>
+
+
+    <div class="note">
+      ${status}
+    </div>
+
+    <div class="note">
+      ※ 正值會保留，不會為了接近 0
+      而人工調整實際結果。
+    </div>
+
+  `;
+
+}
+
+
+/* ===== 儲存回測 ===== */
+
+function saveTestState(){
+
+  localStorage.setItem(
+
+    "baccarat2_test_state",
+
+    JSON.stringify({
+
+      testRecords,
+
+      testProfit,
+
+      testPeak,
+
+      testMaxDrawdown
+
+    })
+
+  );
+
+}
+
+
+/* ===== 載入回測 ===== */
+
+function loadTestState(){
+
+  try{
+
+    const raw =
+      localStorage.getItem(
+        "baccarat2_test_state"
+      );
+
+
+    if(!raw){
+
+      return;
+
+    }
+
+
+    const data =
+      JSON.parse(raw);
+
+
+    testRecords =
+      Array.isArray(
+        data.testRecords
+      )
+        ? data.testRecords
+        : [];
+
+
+    testProfit =
+      Number(
+        data.testProfit || 0
+      );
+
+
+    testPeak =
+      Number(
+        data.testPeak || 0
+      );
+
+
+    testMaxDrawdown =
+      Number(
+        data.testMaxDrawdown || 0
+      );
+
+  }
+  catch(e){
+
+    testRecords = [];
+
+    testProfit = 0;
+
+    testPeak = 0;
+
+    testMaxDrawdown = 0;
+
+  }
+
+}
+
+
+/* ===== 將一局加入回測 ===== */
+
+function addTestRecord(
+  signalData,
+  winner
+){
+
+  const profit =
+    calculateTestProfit(
+      signalData.signal,
+      winner
+    );
+
+
+  testProfit +=
+    profit;
+
+
+  updateDrawdown();
+
+
+  testRecords.push({
+
+    round:
+      testRecords.length + 1,
+
+    signal:
+      signalData.signal,
+
+    confidence:
+      signalData.confidence,
+
+    winner:
+      winner,
+
+    profit:
+      profit
+
+  });
+
+
+  /*
+   * 只保留最近50局。
+   *
+   * 完成50局後仍然可以繼續，
+   * 但統計視窗維持最近50局。
+   */
+
+  if(testRecords.length > 50){
+
+    testRecords.shift();
+
+  }
+
+
+  saveTestState();
+
+  renderStability();
+
+}
+
+
+/* ===== 修正確認本局流程 ===== */
+
+document.getElementById("confirmBtn")
+  .removeEventListener(
+    "click",
+    confirmRound
+  );
+
+
+function confirmRoundV2(){
+
+  if(
+    inputP.length < 2 ||
+    inputB.length < 2
+  ){
+
+    alert(
+      "玩家與莊家都至少需要輸入 2 張牌。"
+    );
+
+    return;
+
+  }
+
+
+  if(
+    inputP.length > 3 ||
+    inputB.length > 3
+  ){
+
+    alert(
+      "每邊最多輸入 3 張牌。"
+    );
+
+    return;
+
+  }
+
+
+  const available =
+    checkCardsAvailable();
+
+
+  if(!available.ok){
+
+    alert(
+      available.message
+    );
+
+    return;
+
+  }
+
+
+  /*
+   * 在清除輸入前先保存牌面。
+   */
+
+  const savedP =
+    [...inputP];
+
+  const savedB =
+    [...inputB];
+
+
+  const p =
+    handPoint(savedP);
+
+  const b =
+    handPoint(savedB);
+
+
+  const winner =
+    getWinner(p,b);
+
+
+  /*
+   * 在這一局確認前取得模型訊號。
+   */
+
+  const signalData =
+    getCurrentSignal();
+
+
+  /*
+   * 扣除牌靴。
+   */
+
+  removeCards(savedP);
+
+  removeCards(savedB);
+
+
+  rounds.push({
+
+    id:Date.now(),
+
+    pCards:savedP,
+
+    bCards:savedB,
+
+    p:p,
+
+    b:b,
+
+    winner:winner
+
+  });
+
+
+  /*
+   * 回測統計。
+   */
+
+  addTestRecord(
+    signalData,
+    winner
+  );
+
+
+  /*
+   * 顯示本局結果。
+   */
+
+  showLastRound(
+    savedP,
+    savedB,
+    p,
+    b,
+    winner
+  );
+
+
+  /*
+   * 清除下一局輸入。
+   */
+
+  inputP = [];
+
+  inputB = [];
+
+
+  saveState();
+
+  render();
+
+}
+
+
+/* ===== 使用新版確認按鈕 ===== */
+
+document.getElementById("confirmBtn")
+  .addEventListener(
+    "click",
+    confirmRoundV2
+  );
+
+
+/* ===== 重置時同步清除回測 ===== */
+
+const oldResetButton =
+  document.getElementById("resetBtn");
+
+
+oldResetButton
+  .addEventListener(
+    "click",
+    ()=>{
+
+      /*
+       * 使用者按下重置時，
+       * 同步清除50局測試資料。
+       */
+
+      setTimeout(()=>{
+
+        testRecords = [];
+
+        testProfit = 0;
+
+        testPeak = 0;
+
+        testMaxDrawdown = 0;
+
+        saveTestState();
+
+        renderStability();
+
+      },50);
+
+    }
+  );
+
+
+/* ===== 初始載入回測 ===== */
+
+loadTestState();
+
+renderStability();
 </script>
 
 </body>
