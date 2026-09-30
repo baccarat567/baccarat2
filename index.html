@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>百家樂牌靴助手 2.0</title>
+
+<style>
+*{
+  box-sizing:border-box;
+  -webkit-tap-highlight-color:transparent;
+}
+
+body{
+  margin:0;
+  background:#0b0f14;
+  color:#f5f5f5;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang TC",
+  "Microsoft JhengHei",sans-serif;
+}
+
+header{
+  padding:22px 16px 14px;
+  background:#111720;
+  position:sticky;
+  top:0;
+  z-index:10;
+  border-bottom:1px solid #29313d;
+}
+
+header h1{
+  margin:0;
+  font-size:22px;
+}
+
+header p{
+  margin:6px 0 0;
+  color:#9da7b5;
+  font-size:13px;
+}
+
+main{
+  padding:14px;
+  max-width:760px;
+  margin:auto;
+}
+
+.card{
+  background:#141b24;
+  border:1px solid #28313d;
+  border-radius:16px;
+  padding:16px;
+  margin-bottom:14px;
+  box-shadow:0 4px 16px rgba(0,0,0,.18);
+}
+
+h2{
+  margin:0 0 14px;
+  font-size:18px;
+}
+
+.row{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+label{
+  color:#aeb7c4;
+  font-size:14px;
+}
+
+select,
+input{
+  width:100%;
+  background:#0e141c;
+  color:#fff;
+  border:1px solid #384352;
+  border-radius:10px;
+  padding:12px;
+  font-size:16px;
+}
+
+button{
+  border:0;
+  border-radius:11px;
+  padding:12px 15px;
+  font-size:15px;
+  font-weight:600;
+  color:#fff;
+  background:#273241;
+}
+
+button:active{
+  transform:scale(.97);
+}
+
+.btn-primary{
+  background:#2563eb;
+}
+
+.btn-danger{
+  background:#b91c1c;
+}
+
+.btn-secondary{
+  background:#374151;
+}
+
+.note{
+  color:#8f9aaa;
+  font-size:12px;
+  line-height:1.6;
+  margin-top:10px;
+}
+
+.result{
+  background:#0e141c;
+  border-radius:12px;
+  padding:13px;
+  line-height:1.7;
+}
+
+.stat-grid{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:10px;
+}
+
+.stat{
+  background:#0e141c;
+  border-radius:12px;
+  padding:12px;
+}
+
+.stat-title{
+  color:#929dac;
+  font-size:12px;
+}
+
+.stat-value{
+  margin-top:4px;
+  font-size:20px;
+  font-weight:700;
+}
+
+.hidden{
+  display:none;
+}
+
+@media(min-width:600px){
+  .stat-grid{
+    grid-template-columns:repeat(4,1fr);
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>🃏 百家樂牌靴助手 2.0</h1>
+  <p>動態牌靴模型・穩定度分析・統計輔助</p>
+</header>
+
+<main>
+
+<section class="card">
+  <h2>① 牌靴設定</h2>
+
+  <label for="decks">牌靴模式</label>
+  <select id="decks">
+    <option value="unknown" selected>未知靴數・動態模型</option>
+    <option value="6">6 靴</option>
+    <option value="8">8 靴</option>
+  </select>
+
+  <div class="note">
+    2.0 將在未知靴數時，同時估算不同合理牌靴規模，
+    並依目前已出牌資料動態調整模型。
+  </div>
+</section>
+
+<section class="card">
+  <h2>② 系統狀態</h2>
+
+  <div class="stat-grid">
+
+    <div class="stat">
+      <div class="stat-title">目前局數</div>
+      <div class="stat-value" id="roundCount">0</div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-title">剩餘牌量</div>
+      <div class="stat-value" id="cardsLeft">—</div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-title">模型狀態</div>
+      <div class="stat-value" id="modelState">初始化</div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-title">訊號</div>
+      <div class="stat-value" id="signalState">觀察</div>
+    </div>
+
+  </div>
+</section>
+
+<section class="card">
+  <h2>③ 牌面輸入</h2>
+
+  <div class="result">
+    <strong>玩家</strong>
+    <div id="playerButtons" class="row" style="margin-top:10px"></div>
+  </div>
+
+  <div class="result" style="margin-top:12px">
+    <strong>莊家</strong>
+    <div id="bankerButtons" class="row" style="margin-top:10px"></div>
+  </div>
+
+  <div class="row" style="margin-top:14px">
+    <button class="btn-primary" id="confirmBtn">
+      確認本局
+    </button>
+
+    <button class="btn-secondary" id="clearInputBtn">
+      清除輸入
+    </button>
+  </div>
+
+  <div class="note">
+    每局輸入玩家與莊家的實際牌面。
+    系統會同步扣除牌靴中的牌。
+  </div>
+</section>
+
+<section class="card">
+  <h2>④ 動態模型分析</h2>
+
+  <div id="probabilityResult" class="result">
+    等待至少 5 局資料後開始分析。
+  </div>
+
+  <div class="note">
+    系統不強迫每一局產生方向；當訊號不足或模型不穩定時，
+    會維持「觀察」狀態。
+  </div>
+</section>
+
+<section class="card">
+  <h2>⑤ 50 局穩定度</h2>
+
+  <div id="stabilityResult" class="result">
+    尚未累積足夠資料。
+  </div>
+</section>
+
+<section class="card">
+  <h2>⑥ 大路</h2>
+
+  <div id="road" class="result">
+    尚無牌局資料
+  </div>
+</section>
+
+<section class="card">
+  <h2>⑦ 本局結果</h2>
+
+  <div id="lastResult" class="result">
+    尚未輸入牌局
+  </div>
+</section>
+
+<section class="card">
+  <h2>⑧ 完整牌局紀錄</h2>
+
+  <div id="history" class="result">
+    尚無紀錄
+  </div>
+</section>
+
+<section class="card">
+  <h2>⑨ 系統操作</h2>
+
+  <div class="row">
+    <button class="btn-danger" id="resetBtn">
+      重置全部資料
+    </button>
+  </div>
+
+  <div class="note">
+    2.0 為統計與牌靴分析工具，不自動下注，
+    不保證獲利。
+  </div>
+</section>
+
+</main>
+
+<script>
+
+/* ===== V2.0 基礎資料 ===== */
+
+const VALUES = [
+  "A","2","3","4","5","6","7",
+  "8","9","10","J","Q","K"
+];
+
+let rounds = [];
+
+let inputP = [];
+let inputB = [];
+
+let counts = {};
+
+let totalProfit = 0;
+
+
+/* ===== 初始化牌靴 ===== */
+
+function newCounts(mode){
+
+  const c = {};
+
+  VALUES.forEach(v=>{
+
+    if(mode === "unknown"){
+      /*
+       * 未知靴數先使用 8 靴上限建立牌庫。
+       * 真正分析時會再由動態模型重新估算。
+       */
+      c[v] = 32;
+    }
+    else{
+      c[v] = 4 * Number(mode);
+    }
+
+  });
+
+  return c;
+}
+
+
+/* ===== 牌面按鈕 ===== */
+
+function makeCardButtons(){
+
+  const playerBox =
+    document.getElementById("playerButtons");
+
+  const bankerBox =
+    document.getElementById("bankerButtons");
+
+  playerBox.innerHTML = "";
+  bankerBox.innerHTML = "";
+
+  VALUES.forEach(v=>{
+
+    const bp = document.createElement("button");
+    bp.textContent = v;
+
+    bp.onclick = ()=>{
+      inputP.push(v);
+      renderInput();
+    };
+
+    playerBox.appendChild(bp);
+
+
+    const bb = document.createElement("button");
+    bb.textContent = v;
+
+    bb.onclick = ()=>{
+      inputB.push(v);
+      renderInput();
+    };
+
+    bankerBox.appendChild(bb);
+
+  });
+
+}
+
+
+/* ===== 顯示目前輸入 ===== */
+
+function renderInput(){
+
+  const p =
+    inputP.length
+      ? inputP.join(" ")
+      : "尚未輸入";
+
+  const b =
+    inputB.length
+      ? inputB.join(" ")
+      : "尚未輸入";
+
+  document.getElementById("lastResult").innerHTML =
+    `玩家：${p}<br>莊家：${b}`;
+
+}
+
+
+/* ===== 清除目前輸入 ===== */
+
+function clearInput(){
+
+  inputP = [];
+  inputB = [];
+
+  renderInput();
+
+}
+
+
+/* ===== 儲存 ===== */
+
+function saveState(){
+
+  localStorage.setItem(
+    "baccarat2_state",
+    JSON.stringify({
+      decks:document.getElementById("decks").value,
+      rounds,
+      counts,
+      totalProfit
+    })
+  );
+
+}
+
+
+/* ===== 載入 ===== */
+
+function loadState(){
+
+  try{
+
+    const raw =
+      localStorage.getItem("baccarat2_state");
+
+    if(!raw){
+
+      counts =
+        newCounts(
+          document.getElementById("decks").value
+        );
+
+      return;
+    }
+
+    const data = JSON.parse(raw);
+
+    document.getElementById("decks").value =
+      data.decks || "unknown";
+
+    rounds =
+      Array.isArray(data.rounds)
+        ? data.rounds
+        : [];
+
+    counts =
+      data.counts || newCounts(
+        document.getElementById("decks").value
+      );
+
+    totalProfit =
+      Number(data.totalProfit || 0);
+
+  }catch(e){
+
+    counts =
+      newCounts(
+        document.getElementById("decks").value
+      );
+
+  }
+
+}
+
+
+/* ===== 初始化 ===== */
+
+document.addEventListener("DOMContentLoaded",()=>{
+
+  makeCardButtons();
+
+  loadState();
+
+  render();
+
+});
+
+</script>
+
+</body>
+</html>
