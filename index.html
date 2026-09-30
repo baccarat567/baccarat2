@@ -3281,6 +3281,440 @@ function(){
 /* ===== 初始更新 ===== */
 
 renderProbability();
+/* ===== V2.0 第6段：整合與測試收尾 ===== */
+
+
+/* ===== 測試完成狀態 ===== */
+
+function getTestCompletion(){
+
+  const count =
+    testRecords.length;
+
+  if(count < 50){
+
+    return {
+      completed:false,
+      text:`目前完成 ${count} / 50 局`
+    };
+
+  }
+
+  return {
+    completed:true,
+    text:"50 局測試已完成"
+  };
+
+}
+
+
+/* ===== 測試摘要 ===== */
+
+function getTestSummary(){
+
+  const stats =
+    getTestStats();
+
+  const recent10 =
+    recentProfit(10);
+
+  const recent20 =
+    recentProfit(20);
+
+
+  return {
+
+    rounds:testRecords.length,
+
+    profit:testProfit,
+
+    drawdown:testMaxDrawdown,
+
+    wins:stats.wins,
+
+    losses:stats.losses,
+
+    neutral:stats.neutral,
+
+    recent10:recent10,
+
+    recent20:recent20,
+
+    distance:Math.abs(testProfit)
+
+  };
+
+}
+
+
+/* ===== 測試重置 ===== */
+
+function resetTestOnly(){
+
+  const ok =
+    confirm(
+      "確定要重新開始 50 局穩定度測試嗎？\n\n"
+      +
+      "這只會清除測試盈虧資料，"
+      +
+      "不會清除已輸入的牌靴資料。"
+    );
+
+
+  if(!ok){
+
+    return;
+
+  }
+
+
+  testRecords = [];
+
+  testProfit = 0;
+
+  testPeak = 0;
+
+  testMaxDrawdown = 0;
+
+
+  saveTestState();
+
+  renderStability();
+
+}
+
+
+/* ===== 建立50局測試按鈕 ===== */
+
+function ensureTestButton(){
+
+  const box =
+    document.getElementById(
+      "stabilityResult"
+    );
+
+
+  if(!box){
+
+    return;
+
+  }
+
+
+  let button =
+    document.getElementById(
+      "resetTestOnlyBtn"
+    );
+
+
+  if(button){
+
+    return;
+
+  }
+
+
+  button =
+    document.createElement(
+      "button"
+    );
+
+
+  button.id =
+    "resetTestOnlyBtn";
+
+
+  button.className =
+    "btn-secondary";
+
+
+  button.textContent =
+    "重新開始 50 局測試";
+
+
+  button.style.marginTop =
+    "12px";
+
+
+  button.addEventListener(
+    "click",
+    resetTestOnly
+  );
+
+
+  box.appendChild(button);
+
+}
+
+
+/* ===== 擴充穩定度顯示 ===== */
+
+const oldRenderStability =
+  renderStability;
+
+
+renderStability =
+function(){
+
+  oldRenderStability();
+
+
+  const box =
+    document.getElementById(
+      "stabilityResult"
+    );
+
+
+  if(!box){
+
+    return;
+
+  }
+
+
+  const completion =
+    getTestCompletion();
+
+
+  const summary =
+    getTestSummary();
+
+
+  const completionText =
+    completion.completed
+      ? "✅ 50 局樣本完成"
+      : completion.text;
+
+
+  const completionColor =
+    completion.completed
+      ? "#86efac"
+      : "#9da7b5";
+
+
+  const extra =
+    document.createElement(
+      "div"
+    );
+
+
+  extra.style.marginTop =
+    "12px";
+
+
+  extra.style.paddingTop =
+    "12px";
+
+
+  extra.style.borderTop =
+    "1px solid #28313d";
+
+
+  extra.innerHTML = `
+
+    <div style="
+      color:${completionColor};
+      font-weight:700;
+      font-size:15px;
+    ">
+      ${completionText}
+    </div>
+
+    <div class="note">
+      目前累積：
+      ${summary.profit > 0 ? "+" : ""}
+      ${summary.profit} 單位
+      ／最大回撤 -${summary.drawdown}
+    </div>
+
+  `;
+
+
+  box.appendChild(extra);
+
+
+  ensureTestButton();
+
+};
+
+
+/* ===== 顯示目前牌靴狀態 ===== */
+
+function refreshModelStatus(){
+
+  const mode =
+    document.getElementById(
+      "decks"
+    ).value;
+
+
+  const modelState =
+    document.getElementById(
+      "modelState"
+    );
+
+
+  if(
+    rounds.length === 0
+  ){
+
+    if(mode === "unknown"){
+
+      modelState.textContent =
+        "待開始";
+
+    }
+    else{
+
+      modelState.textContent =
+        `${mode}靴`;
+
+    }
+
+    return;
+
+  }
+
+
+  if(mode === "unknown"){
+
+    modelState.textContent =
+      "6～8靴動態";
+
+  }
+  else{
+
+    modelState.textContent =
+      `${mode}靴`;
+
+  }
+
+}
+
+
+/* ===== 最後一局資訊 ===== */
+
+function renderLastRound(){
+
+  const box =
+    document.getElementById(
+      "lastResult"
+    );
+
+
+  if(!box){
+
+    return;
+
+  }
+
+
+  if(rounds.length === 0){
+
+    box.innerHTML =
+      "尚未輸入牌局";
+
+    return;
+
+  }
+
+
+  const round =
+    rounds[rounds.length - 1];
+
+
+  const result =
+    round.winner === "P"
+      ? "👤 玩家勝"
+      : round.winner === "B"
+        ? "🏦 莊家勝"
+        : "🤝 和局";
+
+
+  box.innerHTML = `
+
+    <div>
+      <strong>玩家：</strong>
+      ${round.pCards.join(" ")}
+      ／ ${round.p}
+    </div>
+
+    <div style="margin-top:6px">
+      <strong>莊家：</strong>
+      ${round.bCards.join(" ")}
+      ／ ${round.b}
+    </div>
+
+    <div style="
+      margin-top:10px;
+      font-size:18px;
+      font-weight:700;
+    ">
+      ${result}
+    </div>
+
+  `;
+
+}
+
+
+/* ===== 擴充原本 render ===== */
+
+const finalBaseRender =
+  render;
+
+
+render =
+function(){
+
+  finalBaseRender();
+
+  refreshModelStatus();
+
+  renderLastRound();
+
+  renderStability();
+
+};
+
+
+/* ===== 牌靴切換後同步更新 ===== */
+
+document.getElementById("decks")
+  .addEventListener(
+    "change",
+    ()=>{
+
+      setTimeout(()=>{
+
+        refreshModelStatus();
+
+        renderStability();
+
+        renderProbability();
+
+      },100);
+
+    }
+  );
+
+
+/* ===== 頁面啟動 ===== */
+
+refreshModelStatus();
+
+renderLastRound();
+
+renderStability();
+
+renderProbability();
+
+
+/* ===== 開發完成狀態 ===== */
+
+console.log(
+  "百家樂牌靴助手 2.0 已初始化"
+);
 </script>
 
 </body>
