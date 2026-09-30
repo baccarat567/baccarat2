@@ -1125,6 +1125,819 @@ document.getElementById("decks")
 document.getElementById("signalState")
   .textContent =
   "觀察";
+  /* ===== V2.0 第3段：動態牌靴模型與機率 ===== */
+
+
+/* ===== 複製牌靴資料 ===== */
+
+function cloneCounts(source){
+
+  const result = {};
+
+  VALUES.forEach(card=>{
+
+    result[card] =
+      Math.max(
+        0,
+        Number(source[card] || 0)
+      );
+
+  });
+
+  return result;
+
+}
+
+
+/* ===== 從歷史牌局重新建立模型 ===== */
+
+function buildModelCounts(deckNumber){
+
+  const model =
+    newCounts(String(deckNumber));
+
+  /*
+   * 將所有已經出現過的實際牌扣掉。
+   */
+
+  rounds.forEach(round=>{
+
+    [...round.pCards,...round.bCards]
+      .forEach(card=>{
+
+        if(model[card] > 0){
+          model[card]--;
+        }
+
+      });
+
+  });
+
+  return model;
+
+}
+
+
+/* ===== 建立牌池 ===== */
+
+function buildDeckArray(sourceCounts){
+
+  const deck = [];
+
+  VALUES.forEach(card=>{
+
+    const amount =
+      Math.max(
+        0,
+        Math.floor(Number(sourceCounts[card] || 0))
+      );
+
+    for(let i=0;i<amount;i++){
+
+      deck.push(card);
+
+    }
+
+  });
+
+  return deck;
+
+}
+
+
+/* ===== 隨機抽牌 ===== */
+
+function drawRandom(deck){
+
+  if(deck.length === 0){
+    return null;
+  }
+
+  const index =
+    Math.floor(
+      Math.random() * deck.length
+    );
+
+  return deck.splice(index,1)[0];
+
+}
+
+
+/* ===== 模擬單局 ===== */
+
+function simulateBaccaratOnce(sourceCounts){
+
+  const deck =
+    buildDeckArray(sourceCounts);
+
+
+  if(deck.length < 6){
+
+    return null;
+
+  }
+
+
+  /* 玩家兩張 */
+
+  const pCards = [
+    drawRandom(deck),
+    drawRandom(deck)
+  ];
+
+
+  /* 莊家兩張 */
+
+  const bCards = [
+    drawRandom(deck),
+    drawRandom(deck)
+  ];
+
+
+  let p =
+    handPoint(pCards);
+
+  let b =
+    handPoint(bCards);
+
+
+  /*
+   * 天牌
+   * 莊或閒 8、9 都直接結束。
+   */
+
+  if(isNatural(p,b)){
+
+    return getWinner(p,b);
+
+  }
+
+
+  /* ===== 玩家補第三張 ===== */
+
+  let playerThird = null;
+
+  if(p <= 5){
+
+    playerThird =
+      drawRandom(deck);
+
+    pCards.push(playerThird);
+
+    p =
+      handPoint(pCards);
+
+  }
+
+
+  /* ===== 莊家判斷 ===== */
+
+  if(
+    bankerShouldDraw(
+      b,
+      playerThird
+    )
+  ){
+
+    const bankerThird =
+      drawRandom(deck);
+
+    bCards.push(bankerThird);
+
+    b =
+      handPoint(bCards);
+
+  }
+
+
+  return getWinner(p,b);
+
+}
+
+
+/* ===== Monte Carlo ===== */
+
+function runMonteCarlo(
+  sourceCounts,
+  simulations=6000
+){
+
+  let player = 0;
+  let banker = 0;
+  let tie = 0;
+
+  let valid = 0;
+
+
+  for(
+    let i=0;
+    i<simulations;
+    i++
+  ){
+
+    const result =
+      simulateBaccaratOnce(
+        sourceCounts
+      );
+
+
+    if(!result){
+      continue;
+    }
+
+
+    valid++;
+
+
+    if(result === "P"){
+      player++;
+    }
+    else if(result === "B"){
+      banker++;
+    }
+    else{
+      tie++;
+    }
+
+  }
+
+
+  if(valid === 0){
+
+    return {
+      p:0,
+      b:0,
+      t:0,
+      valid:0
+    };
+
+  }
+
+
+  return {
+
+    p:player / valid,
+
+    b:banker / valid,
+
+    t:tie / valid,
+
+    valid:valid
+
+  };
+
+}
+
+
+/* ===== 多模型平均 ===== */
+
+function averageModels(results){
+
+  if(results.length === 0){
+
+    return {
+      p:0,
+      b:0,
+      t:0
+    };
+
+  }
+
+
+  let p = 0;
+  let b = 0;
+  let t = 0;
+
+
+  results.forEach(result=>{
+
+    p += result.p;
+    b += result.b;
+    t += result.t;
+
+  });
+
+
+  return {
+
+    p:p / results.length,
+
+    b:b / results.length,
+
+    t:t / results.length
+
+  };
+
+}
+
+
+/* ===== 計算模型穩定程度 ===== */
+
+function calculateModelStability(results){
+
+  if(results.length <= 1){
+
+    return 1;
+
+  }
+
+
+  const ps =
+    results.map(x=>x.p);
+
+  const bs =
+    results.map(x=>x.b);
+
+
+  const pRange =
+    Math.max(...ps) -
+    Math.min(...ps);
+
+  const bRange =
+    Math.max(...bs) -
+    Math.min(...bs);
+
+
+  const totalRange =
+    pRange + bRange;
+
+
+  /*
+   * 不同牌靴模型差異越小，
+   * 穩定度越高。
+   */
+
+  const stability =
+    Math.max(
+      0,
+      Math.min(
+        1,
+        1 - totalRange * 3
+      )
+    );
+
+
+  return stability;
+
+}
+
+
+/* ===== 建立目前模型 ===== */
+
+function buildDynamicModels(){
+
+  const mode =
+    document.getElementById("decks").value;
+
+
+  /*
+   * 已知牌靴
+   */
+
+  if(mode !== "unknown"){
+
+    return [
+      {
+        decks:Number(mode),
+        counts:cloneCounts(counts)
+      }
+    ];
+
+  }
+
+
+  /*
+   * 未知牌靴：
+   *
+   * 使用 6、7、8 靴三個候選模型。
+   *
+   * 並且全部扣除已經輸入的實際牌。
+   */
+
+  const models = [];
+
+
+  [6,7,8].forEach(deckNumber=>{
+
+    models.push({
+
+      decks:deckNumber,
+
+      counts:
+        buildModelCounts(
+          deckNumber
+        )
+
+    });
+
+  });
+
+
+  return models;
+
+}
+
+
+/* ===== 動態機率分析 ===== */
+
+function calculateDynamicProbability(){
+
+  /*
+   * 沒有足夠資料時不強行產生訊號。
+   */
+
+  if(rounds.length < 5){
+
+    return {
+
+      ready:false,
+
+      p:0,
+
+      b:0,
+
+      t:0,
+
+      stability:0,
+
+      confidence:0,
+
+      signal:"觀察",
+
+      reason:
+        "至少需要 5 局資料。"
+
+    };
+
+  }
+
+
+  const models =
+    buildDynamicModels();
+
+
+  const results = [];
+
+
+  models.forEach(model=>{
+
+    const result =
+      runMonteCarlo(
+        model.counts,
+        6000
+      );
+
+
+    result.decks =
+      model.decks;
+
+
+    results.push(result);
+
+  });
+
+
+  const average =
+    averageModels(results);
+
+
+  const stability =
+    calculateModelStability(
+      results
+    );
+
+
+  /*
+   * 莊閒差距
+   */
+
+  const difference =
+    Math.abs(
+      average.b -
+      average.p
+    );
+
+
+  /*
+   * 基礎信心：
+   *
+   * 差距越大不代表一定正確，
+   * 所以還要乘上模型穩定度。
+   */
+
+  let confidence =
+    Math.min(
+      1,
+      difference / 0.04
+    );
+
+
+  confidence *=
+    stability;
+
+
+  /*
+   * 訊號門檻
+   *
+   * 2.0 不強迫每局下注方向。
+   */
+
+  let signal =
+    "觀察";
+
+  let reason =
+    "目前模型差距不足。";
+
+
+  if(stability < 0.65){
+
+    signal =
+      "觀察";
+
+    reason =
+      "不同牌靴模型差異較大。";
+
+  }
+  else if(difference < 0.008){
+
+    signal =
+      "觀察";
+
+    reason =
+      "莊閒理論差距非常小。";
+
+  }
+  else if(difference < 0.015){
+
+    signal =
+      "輕微信號";
+
+    reason =
+      "存在小幅理論差異，但仍需觀察。";
+
+  }
+  else if(difference < 0.03){
+
+    signal =
+      average.b > average.p
+        ? "偏莊"
+        : "偏閒";
+
+    reason =
+      "理論差距已達可觀察範圍。";
+
+  }
+  else{
+
+    signal =
+      average.b > average.p
+        ? "偏莊"
+        : "偏閒";
+
+    reason =
+      "目前理論差距較明顯。";
+
+  }
+
+
+  return {
+
+    ready:true,
+
+    p:average.p,
+
+    b:average.b,
+
+    t:average.t,
+
+    stability:stability,
+
+    confidence:confidence,
+
+    difference:difference,
+
+    signal:signal,
+
+    reason:reason,
+
+    models:results
+
+  };
+
+}
+
+
+/* ===== 顯示機率 ===== */
+
+function renderProbability(){
+
+  const box =
+    document.getElementById(
+      "probabilityResult"
+    );
+
+  const signalBox =
+    document.getElementById(
+      "signalState"
+    );
+
+
+  const analysis =
+    calculateDynamicProbability();
+
+
+  if(!analysis.ready){
+
+    box.innerHTML = `
+
+      <strong>🧠 動態模型</strong>
+
+      <br><br>
+
+      ${analysis.reason}
+
+      <br><br>
+
+      <span style="color:#9da7b5">
+        目前不產生方向訊號。
+      </span>
+
+    `;
+
+    signalBox.textContent =
+      "觀察";
+
+    return;
+
+  }
+
+
+  const p =
+    (analysis.p * 100)
+      .toFixed(2);
+
+  const b =
+    (analysis.b * 100)
+      .toFixed(2);
+
+  const t =
+    (analysis.t * 100)
+      .toFixed(2);
+
+  const diff =
+    (analysis.difference * 100)
+      .toFixed(2);
+
+  const stability =
+    (analysis.stability * 100)
+      .toFixed(0);
+
+  const confidence =
+    (analysis.confidence * 100)
+      .toFixed(0);
+
+
+  signalBox.textContent =
+    analysis.signal;
+
+
+  let signalColor =
+    "#9da7b5";
+
+
+  if(
+    analysis.signal === "偏莊"
+  ){
+    signalColor =
+      "#f87171";
+  }
+  else if(
+    analysis.signal === "偏閒"
+  ){
+    signalColor =
+      "#60a5fa";
+  }
+  else if(
+    analysis.signal === "輕微信號"
+  ){
+    signalColor =
+      "#facc15";
+  }
+
+
+  box.innerHTML = `
+
+    <div style="
+      font-size:20px;
+      font-weight:700;
+      color:${signalColor};
+    ">
+      ${analysis.signal}
+    </div>
+
+    <div style="
+      margin-top:10px;
+      font-size:15px;
+    ">
+      玩家：
+      <strong>${p}%</strong>
+    </div>
+
+    <div style="
+      margin-top:5px;
+      font-size:15px;
+    ">
+      莊家：
+      <strong>${b}%</strong>
+    </div>
+
+    <div style="
+      margin-top:5px;
+      font-size:15px;
+    ">
+      和局：
+      <strong>${t}%</strong>
+    </div>
+
+    <hr style="
+      border:0;
+      border-top:1px solid #28313d;
+      margin:12px 0;
+    ">
+
+    <div>
+      莊閒理論差距：
+      <strong>${diff}%</strong>
+    </div>
+
+    <div style="margin-top:5px">
+      模型穩定度：
+      <strong>${stability}%</strong>
+    </div>
+
+    <div style="margin-top:5px">
+      訊號信心：
+      <strong>${confidence}%</strong>
+    </div>
+
+    <div class="note">
+      ${analysis.reason}
+    </div>
+
+  `;
+
+}
+
+
+/* ===== 模型資訊 ===== */
+
+function renderModelInfo(){
+
+  const mode =
+    document.getElementById("decks").value;
+
+  const modelState =
+    document.getElementById(
+      "modelState"
+    );
+
+
+  if(mode === "unknown"){
+
+    modelState.textContent =
+      "6～8靴動態";
+
+  }
+  else{
+
+    modelState.textContent =
+      `${mode}靴`;
+
+  }
+
+}
+
+
+/* ===== 擴充原本 render ===== */
+
+const originalRender =
+  render;
+
+
+render = function(){
+
+  originalRender();
+
+  renderModelInfo();
+
+  renderProbability();
+
+};
+
+
+/* ===== 初始更新 ===== */
+
+renderProbability();
 </script>
 
 </body>
