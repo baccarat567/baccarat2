@@ -2735,6 +2735,552 @@ oldResetButton
 loadTestState();
 
 renderStability();
+/* ===== V2.0 第5段：訊號穩定與防方向漂移 ===== */
+
+
+/* ===== 取得最近訊號 ===== */
+
+function getRecentSignals(n=5){
+
+  return testRecords
+    .slice(-n)
+    .map(item=>item.signal)
+    .filter(signal=>
+      signal === "偏莊" ||
+      signal === "偏閒"
+    );
+
+}
+
+
+/* ===== 計算最近訊號一致度 ===== */
+
+function calculateSignalConsistency(){
+
+  const signals =
+    getRecentSignals(5);
+
+
+  if(signals.length < 2){
+
+    return {
+      ratio:1,
+      count:signals.length,
+      dominant:"觀察"
+    };
+
+  }
+
+
+  let banker = 0;
+  let player = 0;
+
+
+  signals.forEach(signal=>{
+
+    if(signal === "偏莊"){
+      banker++;
+    }
+
+    if(signal === "偏閒"){
+      player++;
+    }
+
+  });
+
+
+  const dominant =
+    banker > player
+      ? "偏莊"
+      : player > banker
+        ? "偏閒"
+        : "觀察";
+
+
+  const maxCount =
+    Math.max(
+      banker,
+      player
+    );
+
+
+  const ratio =
+    maxCount /
+    signals.length;
+
+
+  return {
+
+    ratio:ratio,
+
+    count:signals.length,
+
+    dominant:dominant
+
+  };
+
+}
+
+
+/* ===== 檢查是否正在單方向漂移 ===== */
+
+function detectDirectionalDrift(){
+
+  const signals =
+    getRecentSignals(6);
+
+
+  if(signals.length < 4){
+
+    return false;
+
+  }
+
+
+  /*
+   * 最近4次以上都同方向，
+   * 視為可能進入單方向漂移。
+   */
+
+  const recent4 =
+    signals.slice(-4);
+
+
+  const same =
+    recent4.every(
+      signal =>
+        signal === recent4[0]
+    );
+
+
+  return same;
+
+}
+
+
+/* ===== 防止訊號突然反轉 ===== */
+
+function detectSignalFlip(
+  currentSignal
+){
+
+  const signals =
+    getRecentSignals(4);
+
+
+  if(
+    signals.length < 3
+  ){
+
+    return false;
+
+  }
+
+
+  const recent3 =
+    signals.slice(-3);
+
+
+  const previousDominant =
+    recent3.filter(
+      signal =>
+        signal === "偏莊"
+    ).length >= 2
+      ? "偏莊"
+      : recent3.filter(
+          signal =>
+            signal === "偏閒"
+        ).length >= 2
+          ? "偏閒"
+          : "觀察";
+
+
+  /*
+   * 如果新訊號和最近主要方向相反，
+   * 不立即切換。
+   */
+
+  if(
+    previousDominant !== "觀察" &&
+    currentSignal !== previousDominant
+  ){
+
+    return true;
+
+  }
+
+
+  return false;
+
+}
+
+
+/* ===== 穩定化訊號 ===== */
+
+function stabilizeSignal(
+  analysis
+){
+
+  if(!analysis.ready){
+
+    return {
+
+      ...analysis,
+
+      signal:"觀察",
+
+      stableSignal:"觀察",
+
+      stabilityReason:
+        "資料不足。"
+
+    };
+
+  }
+
+
+  const rawSignal =
+    analysis.signal;
+
+
+  /*
+   * 本身不是方向訊號，
+   * 直接維持觀察。
+   */
+
+  if(
+    rawSignal !== "偏莊" &&
+    rawSignal !== "偏閒"
+  ){
+
+    return {
+
+      ...analysis,
+
+      stableSignal:"觀察",
+
+      stabilityReason:
+        "目前沒有足夠明確的方向。"
+
+    };
+
+  }
+
+
+  const consistency =
+    calculateSignalConsistency();
+
+
+  const drift =
+    detectDirectionalDrift();
+
+
+  const flip =
+    detectSignalFlip(
+      rawSignal
+    );
+
+
+  /*
+   * 信心太低。
+   */
+
+  if(
+    analysis.confidence < 0.35
+  ){
+
+    return {
+
+      ...analysis,
+
+      stableSignal:"觀察",
+
+      stabilityReason:
+        "原始訊號信心不足。"
+
+    };
+
+  }
+
+
+  /*
+   * 模型本身不穩定。
+   */
+
+  if(
+    analysis.stability < 0.65
+  ){
+
+    return {
+
+      ...analysis,
+
+      stableSignal:"觀察",
+
+      stabilityReason:
+        "不同牌靴模型差異較大。"
+
+    };
+
+  }
+
+
+  /*
+   * 最近方向互相衝突。
+   */
+
+  if(flip){
+
+    return {
+
+      ...analysis,
+
+      stableSignal:"觀察",
+
+      stabilityReason:
+        "目前方向與近期主要訊號不同，暫不切換。"
+
+    };
+
+  }
+
+
+  /*
+   * 同方向連續太久，
+   * 但信心沒有同步提高。
+   */
+
+  if(
+    drift &&
+    analysis.confidence < 0.70
+  ){
+
+    return {
+
+      ...analysis,
+
+      stableSignal:"觀察",
+
+      stabilityReason:
+        "近期單方向訊號過度集中，暫停追蹤。"
+
+    };
+
+  }
+
+
+  /*
+   * 如果最近訊號非常不一致，
+   * 也不強行判斷。
+   */
+
+  if(
+    consistency.count >= 3 &&
+    consistency.ratio < 0.60
+  ){
+
+    return {
+
+      ...analysis,
+
+      stableSignal:"觀察",
+
+      stabilityReason:
+        "近期訊號一致度不足。"
+
+    };
+
+  }
+
+
+  /*
+   * 通過所有穩定條件。
+   */
+
+  return {
+
+    ...analysis,
+
+    stableSignal:rawSignal,
+
+    stabilityReason:
+      "目前方向與模型穩定度一致。"
+
+  };
+
+}
+
+
+/* ===== 取得穩定訊號 ===== */
+
+function getStableSignal(){
+
+  const analysis =
+    calculateDynamicProbability();
+
+
+  return stabilizeSignal(
+    analysis
+  );
+
+}
+
+
+/* ===== 覆蓋原本取得訊號的方法 ===== */
+
+getCurrentSignal =
+function(){
+
+  const analysis =
+    getStableSignal();
+
+
+  return {
+
+    signal:
+      analysis.stableSignal,
+
+    rawSignal:
+      analysis.signal,
+
+    p:
+      analysis.p,
+
+    b:
+      analysis.b,
+
+    confidence:
+      analysis.confidence,
+
+    stability:
+      analysis.stability,
+
+    reason:
+      analysis.stabilityReason
+
+  };
+
+};
+
+
+/* ===== 顯示防漂移資訊 ===== */
+
+function renderSignalStability(){
+
+  const box =
+    document.getElementById(
+      "probabilityResult"
+    );
+
+
+  if(!box){
+
+    return;
+
+  }
+
+
+  const analysis =
+    getStableSignal();
+
+
+  const consistency =
+    calculateSignalConsistency();
+
+
+  let stabilityText =
+    "觀察";
+
+
+  if(
+    analysis.stableSignal ===
+    "偏莊"
+  ){
+
+    stabilityText =
+      "🟠 穩定偏莊";
+
+  }
+  else if(
+    analysis.stableSignal ===
+    "偏閒"
+  ){
+
+    stabilityText =
+      "🔵 穩定偏閒";
+
+  }
+  else{
+
+    stabilityText =
+      "⚪ 觀察";
+
+  }
+
+
+  box.innerHTML += `
+
+    <hr style="
+      border:0;
+      border-top:1px solid #28313d;
+      margin:14px 0;
+    ">
+
+    <div style="
+      font-size:16px;
+      font-weight:700;
+    ">
+      訊號穩定層：
+      ${stabilityText}
+    </div>
+
+    <div style="
+      margin-top:7px;
+    ">
+      近期方向一致度：
+      <strong>
+        ${(consistency.ratio * 100).toFixed(0)}%
+      </strong>
+    </div>
+
+    <div style="
+      margin-top:5px;
+    ">
+      穩定判斷：
+      <strong>
+        ${analysis.stabilityReason}
+      </strong>
+    </div>
+
+    <div class="note">
+      2.0 不會因短期連續結果而強迫模型維持同一方向。
+      訊號不穩定時優先顯示「觀察」。
+    </div>
+
+  `;
+
+}
+
+
+/* ===== 擴充機率顯示 ===== */
+
+const oldRenderProbability =
+  renderProbability;
+
+
+renderProbability =
+function(){
+
+  oldRenderProbability();
+
+  renderSignalStability();
+
+};
+
+
+/* ===== 初始更新 ===== */
+
+renderProbability();
 </script>
 
 </body>
