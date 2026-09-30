@@ -495,7 +495,636 @@ document.addEventListener("DOMContentLoaded",()=>{
   render();
 
 });
+/* ===== V2.0 第2段：牌值與牌局核心 ===== */
 
+
+/* ===== 牌面點數 ===== */
+
+function cardValue(card){
+
+  if(card === "A"){
+    return 1;
+  }
+
+  if(
+    card === "10" ||
+    card === "J" ||
+    card === "Q" ||
+    card === "K"
+  ){
+    return 0;
+  }
+
+  return Number(card);
+}
+
+
+/* ===== 計算手牌點數 ===== */
+
+function handPoint(cards){
+
+  let total = 0;
+
+  cards.forEach(card=>{
+    total += cardValue(card);
+  });
+
+  return total % 10;
+}
+
+
+/* ===== 判斷是否為天牌 ===== */
+
+function isNatural(p,b){
+
+  return (
+    (p === 8 || p === 9) ||
+    (b === 8 || b === 9)
+  );
+
+}
+
+
+/* ===== 莊家第三張牌規則 ===== */
+
+function bankerShouldDraw(bankerPoint, playerThird){
+
+  /*
+   * 莊家 0～2：補牌
+   * 莊家 7：停牌
+   * 莊家 3～6：依玩家第三張牌決定
+   */
+
+  if(bankerPoint <= 2){
+    return true;
+  }
+
+  if(bankerPoint >= 7){
+    return false;
+  }
+
+  /*
+   * 玩家沒有第三張牌
+   * 莊家 3～5 補牌
+   * 莊家 6～7 停牌
+   */
+
+  if(playerThird === null){
+    return bankerPoint <= 5;
+  }
+
+  const v = cardValue(playerThird);
+
+  if(bankerPoint === 3){
+    return v !== 8;
+  }
+
+  if(bankerPoint === 4){
+    return v >= 2 && v <= 7;
+  }
+
+  if(bankerPoint === 5){
+    return v >= 4 && v <= 7;
+  }
+
+  if(bankerPoint === 6){
+    return v === 6 || v === 7;
+  }
+
+  return false;
+}
+
+
+/* ===== 檢查牌靴是否還有這張牌 ===== */
+
+function countNeeded(cards){
+
+  const need = {};
+
+  cards.forEach(card=>{
+
+    need[card] =
+      (need[card] || 0) + 1;
+
+  });
+
+  return need;
+}
+
+
+/* ===== 檢查本局牌是否足夠 ===== */
+
+function checkCardsAvailable(){
+
+  const need = {};
+
+  [...inputP,...inputB].forEach(card=>{
+
+    need[card] =
+      (need[card] || 0) + 1;
+
+  });
+
+  for(const card of VALUES){
+
+    if((need[card] || 0) > (counts[card] || 0)){
+
+      return {
+        ok:false,
+        message:
+          `牌靴中的 ${card} 不足，無法確認本局。`
+      };
+
+    }
+
+  }
+
+  return {
+    ok:true
+  };
+
+}
+
+
+/* ===== 扣除實際牌面 ===== */
+
+function removeCards(cards){
+
+  cards.forEach(card=>{
+
+    counts[card]--;
+
+  });
+
+}
+
+
+/* ===== 判斷莊閒結果 ===== */
+
+function getWinner(p,b){
+
+  if(p > b){
+    return "P";
+  }
+
+  if(b > p){
+    return "B";
+  }
+
+  return "T";
+
+}
+
+
+/* ===== 確認本局 ===== */
+
+function confirmRound(){
+
+  /*
+   * 每邊至少 2 張
+   * 最多 3 張
+   */
+
+  if(inputP.length < 2 || inputB.length < 2){
+
+    alert("玩家與莊家都至少需要輸入 2 張牌。");
+
+    return;
+  }
+
+  if(inputP.length > 3 || inputB.length > 3){
+
+    alert("每邊最多輸入 3 張牌。");
+
+    return;
+  }
+
+
+  /* 檢查牌靴 */
+
+  const available =
+    checkCardsAvailable();
+
+  if(!available.ok){
+
+    alert(available.message);
+
+    return;
+  }
+
+
+  /* 計算點數 */
+
+  const p =
+    handPoint(inputP);
+
+  const b =
+    handPoint(inputB);
+
+
+  /* 結果 */
+
+  const winner =
+    getWinner(p,b);
+
+
+  /* 扣牌 */
+
+  removeCards(inputP);
+  removeCards(inputB);
+
+
+  /* 紀錄 */
+
+  rounds.push({
+
+    id:Date.now(),
+
+    pCards:[...inputP],
+
+    bCards:[...inputB],
+
+    p:p,
+
+    b:b,
+
+    winner:winner
+
+  });
+
+
+  /* 更新畫面 */
+
+  clearInput();
+
+  saveState();
+
+  render();
+
+
+  /* 顯示本局 */
+
+  showLastRound(
+    inputP,
+    inputB,
+    p,
+    b,
+    winner
+  );
+
+}
+
+
+/* ===== 顯示最後一局 ===== */
+
+function showLastRound(
+  pCards,
+  bCards,
+  p,
+  b,
+  winner
+){
+
+  let resultText = "";
+
+  if(winner === "P"){
+    resultText = "👤 玩家勝";
+  }
+  else if(winner === "B"){
+    resultText = "🏦 莊家勝";
+  }
+  else{
+    resultText = "🤝 和局";
+  }
+
+
+  document.getElementById("lastResult").innerHTML = `
+
+    <div>
+      <strong>玩家：</strong>
+      ${pCards.join(" ")}
+      ／ ${p}
+    </div>
+
+    <div style="margin-top:6px">
+      <strong>莊家：</strong>
+      ${bCards.join(" ")}
+      ／ ${b}
+    </div>
+
+    <div style="
+      margin-top:10px;
+      font-size:18px;
+      font-weight:700;
+    ">
+      ${resultText}
+    </div>
+
+  `;
+
+}
+
+
+/* ===== 計算剩餘牌量 ===== */
+
+function getCardsLeft(){
+
+  let total = 0;
+
+  VALUES.forEach(card=>{
+
+    total += Number(counts[card] || 0);
+
+  });
+
+  return total;
+
+}
+
+
+/* ===== 顯示牌靴統計 ===== */
+
+function renderShoeStats(){
+
+  const left =
+    getCardsLeft();
+
+  const cardsLeft =
+    document.getElementById("cardsLeft");
+
+  const modelState =
+    document.getElementById("modelState");
+
+  const roundCount =
+    document.getElementById("roundCount");
+
+
+  roundCount.textContent =
+    rounds.length;
+
+
+  /*
+   * 未知靴數時目前使用模型上限，
+   * 後面第4段會改成真正動態估算。
+   */
+
+  if(
+    document.getElementById("decks").value ===
+    "unknown"
+  ){
+
+    cardsLeft.textContent =
+      left;
+
+    modelState.textContent =
+      "動態";
+
+  }
+  else{
+
+    cardsLeft.textContent =
+      left;
+
+    modelState.textContent =
+      `${document.getElementById("decks").value}靴`;
+
+  }
+
+}
+
+
+/* ===== 大路 ===== */
+
+function renderRoad(){
+
+  const road =
+    document.getElementById("road");
+
+  if(rounds.length === 0){
+
+    road.innerHTML =
+      "尚無牌局資料";
+
+    return;
+
+  }
+
+
+  const symbols =
+    rounds.map(round=>{
+
+      if(round.winner === "P"){
+        return "🔵";
+      }
+
+      if(round.winner === "B"){
+        return "🔴";
+      }
+
+      return "🟢";
+
+    });
+
+
+  road.innerHTML = `
+
+    <div style="
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+      line-height:1;
+      font-size:24px;
+    ">
+
+      ${symbols.join("")}
+
+    </div>
+
+    <div class="note">
+      🔵 玩家　🔴 莊家　🟢 和局
+    </div>
+
+  `;
+
+}
+
+
+/* ===== 歷史紀錄 ===== */
+
+function renderHistory(){
+
+  const history =
+    document.getElementById("history");
+
+  if(rounds.length === 0){
+
+    history.innerHTML =
+      "尚無紀錄";
+
+    return;
+
+  }
+
+
+  history.innerHTML =
+    rounds
+      .map((round,index)=>{
+
+        const result =
+          round.winner === "P"
+            ? "玩家"
+            : round.winner === "B"
+              ? "莊家"
+              : "和局";
+
+        return `
+
+          <div style="
+            padding:8px 0;
+            border-bottom:1px solid #28313d;
+          ">
+
+            <strong>第 ${index + 1} 局</strong>
+
+            <br>
+
+            玩家：
+            ${round.pCards.join(" ")}
+            → ${round.p}
+
+            <br>
+
+            莊家：
+            ${round.bCards.join(" ")}
+            → ${round.b}
+
+            <br>
+
+            結果：
+            ${result}
+
+          </div>
+
+        `;
+
+      })
+      .join("");
+
+}
+
+
+/* ===== 統一畫面更新 ===== */
+
+function render(){
+
+  renderShoeStats();
+
+  renderRoad();
+
+  renderHistory();
+
+  renderInput();
+
+}
+
+
+/* ===== 綁定按鈕 ===== */
+
+document.getElementById("confirmBtn")
+  .addEventListener(
+    "click",
+    confirmRound
+  );
+
+
+document.getElementById("clearInputBtn")
+  .addEventListener(
+    "click",
+    clearInput
+  );
+
+
+document.getElementById("resetBtn")
+  .addEventListener(
+    "click",
+    ()=>{
+
+      const ok =
+        confirm(
+          "確定要重置全部牌局與牌靴資料嗎？"
+        );
+
+      if(!ok){
+        return;
+      }
+
+      rounds = [];
+
+      inputP = [];
+
+      inputB = [];
+
+      totalProfit = 0;
+
+      counts =
+        newCounts(
+          document.getElementById("decks").value
+        );
+
+      saveState();
+
+      render();
+
+    }
+  );
+
+
+/* ===== 牌靴模式變更 ===== */
+
+document.getElementById("decks")
+  .addEventListener(
+    "change",
+    ()=>{
+
+      const ok =
+        confirm(
+          "切換牌靴模式會重新建立牌靴，是否繼續？"
+        );
+
+      if(!ok){
+
+        location.reload();
+
+        return;
+
+      }
+
+      rounds = [];
+
+      inputP = [];
+
+      inputB = [];
+
+      totalProfit = 0;
+
+      counts =
+        newCounts(
+          document.getElementById("decks").value
+        );
+
+      saveState();
+
+      render();
+
+    }
+  );
+
+
+/* ===== 預設訊號 ===== */
+
+document.getElementById("signalState")
+  .textContent =
+  "觀察";
 </script>
 
 </body>
