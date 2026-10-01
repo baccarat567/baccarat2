@@ -3715,6 +3715,61 @@ renderProbability();
 console.log(
   "百家樂牌靴助手 2.0 已初始化"
 );
+<script>
+
+/* ================================
+   V2.0 牌面按鈕修復
+   ================================ */
+
+document.addEventListener("DOMContentLoaded", function () {
+
+  const allButtons = document.querySelectorAll("button");
+
+  allButtons.forEach(function (btn) {
+
+    const text = btn.textContent.trim();
+
+    // 只處理 A～K 的牌面按鈕
+    if (!/^(A|[2-9]|10|J|Q|K)$/.test(text)) {
+      return;
+    }
+
+    btn.style.pointerEvents = "auto";
+
+    btn.addEventListener("click", function () {
+
+      console.log("牌面按鈕:", text);
+
+      if (typeof window.handleCardClick === "function") {
+        window.handleCardClick(text, btn);
+        return;
+      }
+
+      if (typeof window.addCard === "function") {
+        window.addCard(text, btn);
+        return;
+      }
+
+      if (typeof window.selectCard === "function") {
+        window.selectCard(text, btn);
+        return;
+      }
+
+      // 暫時標記按鈕已被點擊
+      btn.classList.toggle("selected");
+
+    });
+
+  });
+
+  console.log("V2.0 牌面按鈕修復已啟動");
+
+});
+
+</script>
+
+</body>
+</html>
 </script>
 
 </body>
