@@ -3802,43 +3802,26 @@ function pick(side,v){
 
 function renderInput(){
 
-  const pSel=document.getElementById("pSel");
-  const bSel=document.getElementById("bSel");
+  const box =
+    document.getElementById("lastResult");
 
-  const pCount=document.getElementById("pCount");
-  const bCount=document.getElementById("bCount");
+  if(!box) return;
 
-  if(pSel){
-
-    pSel.textContent=
-      inputP.length
+  const p =
+    inputP.length
       ? inputP.join(" ")
-      : "尚未選牌";
+      : "尚未輸入";
 
-  }
-
-  if(bSel){
-
-    bSel.textContent=
-      inputB.length
+  const b =
+    inputB.length
       ? inputB.join(" ")
-      : "尚未選牌";
+      : "尚未輸入";
 
-  }
-
-  if(pCount){
-
-    pCount.textContent=
-      inputP.length+"/3";
-
-  }
-
-  if(bCount){
-
-    bCount.textContent=
-      inputB.length+"/3";
-
-  }
+  box.innerHTML = `
+    <strong>目前輸入</strong><br><br>
+    玩家：${p}<br>
+    莊家：${b}
+  `;
 
 }
 
