@@ -3734,7 +3734,10 @@ b.style.zIndex="9999";
 b.style.pointerEvents="auto";
 
       b.textContent=v;
-
+b.ontouchstart=function(e){
+  e.preventDefault();
+  alert("觸控成功：" + v);
+};
       b.addEventListener("click",function(){
 
   alert("有按到牌：" + v);
