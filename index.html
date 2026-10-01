@@ -3709,67 +3709,121 @@ renderStability();
 
 renderProbability();
 
+/* =================================
+   V2.0
+   還原 1.0 原版觸控牌面
+   ================================= */
 
-/* ===== 開發完成狀態 ===== */
+function makeButtons(){
 
-console.log(
-  "百家樂牌靴助手 2.0 已初始化"
-);
-<script>
+  ["pButtons","bButtons"].forEach((id,idx)=>{
 
-/* ================================
-   V2.0 牌面按鈕修復
-   ================================ */
+    const el=document.getElementById(id);
 
-document.addEventListener("DOMContentLoaded", function () {
+    if(!el) return;
 
-  const allButtons = document.querySelectorAll("button");
+    el.innerHTML="";
 
-  allButtons.forEach(function (btn) {
+    VALUES.forEach(v=>{
 
-    const text = btn.textContent.trim();
+      let b=document.createElement("button");
 
-    // 只處理 A～K 的牌面按鈕
-    if (!/^(A|[2-9]|10|J|Q|K)$/.test(text)) {
-      return;
-    }
+      b.type="button";
 
-    btn.style.pointerEvents = "auto";
+      b.textContent=v;
 
-    btn.addEventListener("click", function () {
+      b.onclick=()=>pick(
+        idx===0 ? "P" : "B",
+        v
+      );
 
-      console.log("牌面按鈕:", text);
-
-      if (typeof window.handleCardClick === "function") {
-        window.handleCardClick(text, btn);
-        return;
-      }
-
-      if (typeof window.addCard === "function") {
-        window.addCard(text, btn);
-        return;
-      }
-
-      if (typeof window.selectCard === "function") {
-        window.selectCard(text, btn);
-        return;
-      }
-
-      // 暫時標記按鈕已被點擊
-      btn.classList.toggle("selected");
+      el.appendChild(b);
 
     });
 
   });
 
-  console.log("V2.0 牌面按鈕修復已啟動");
+}
 
-});
 
-</script>
+function pick(side,v){
 
-</body>
-</html>
+  let arr=side==="P" ? inputP : inputB;
+
+  /* 每方最多三張 */
+  if(arr.length>=3) return;
+
+  /* 檢查整副牌剩餘數量 */
+  let used=[
+    ...inputP,
+    ...inputB
+  ].filter(x=>x===v).length;
+
+  if(used>=counts[v]){
+
+    alert("這張牌已經沒有足夠的剩餘數量。");
+
+    return;
+
+  }
+
+  arr.push(v);
+
+  renderInput();
+
+}
+
+
+function renderInput(){
+
+  const pSel=document.getElementById("pSel");
+  const bSel=document.getElementById("bSel");
+
+  const pCount=document.getElementById("pCount");
+  const bCount=document.getElementById("bCount");
+
+  if(pSel){
+
+    pSel.textContent=
+      inputP.length
+      ? inputP.join(" ")
+      : "尚未選牌";
+
+  }
+
+  if(bSel){
+
+    bSel.textContent=
+      inputB.length
+      ? inputB.join(" ")
+      : "尚未選牌";
+
+  }
+
+  if(pCount){
+
+    pCount.textContent=
+      inputP.length+"/3";
+
+  }
+
+  if(bCount){
+
+    bCount.textContent=
+      inputB.length+"/3";
+
+  }
+
+}
+
+
+/* 建立玩家／莊家 A～K 按鍵 */
+
+makeButtons();
+
+renderInput();
+
+console.log("V2.0 原版牌面觸控按鍵已恢復");
 </script>
 
 </body>
