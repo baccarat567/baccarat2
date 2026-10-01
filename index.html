@@ -3732,10 +3732,13 @@ function makeButtons(){
 
       b.textContent=v;
 
-      b.onclick=()=>pick(
-        idx===0 ? "P" : "B",
-        v
-      );
+      b.onclick=()=>{
+  console.log("按到牌:", v);
+  pick(
+    idx===0 ? "P" : "B",
+    v
+  );
+};
 
       el.appendChild(b);
 
