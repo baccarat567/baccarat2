@@ -3735,13 +3735,16 @@ b.style.pointerEvents="auto";
 
       b.textContent=v;
 
-      b.onclick=()=>{
-  console.log("按到牌:", v);
+      b.addEventListener("click",function(){
+
+  alert("有按到牌：" + v);
+
   pick(
     idx===0 ? "P" : "B",
     v
   );
-};
+
+});
 
       el.appendChild(b);
 
