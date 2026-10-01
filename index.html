@@ -361,23 +361,37 @@ function makeCardButtons(){
   VALUES.forEach(v=>{
 
     const bp = document.createElement("button");
+
+    bp.type = "button";
     bp.textContent = v;
 
-    bp.onclick = ()=>{
+    bp.addEventListener("pointerup", function(e){
+
+      e.preventDefault();
+
       inputP.push(v);
+
       renderInput();
-    };
+
+    });
 
     playerBox.appendChild(bp);
 
 
     const bb = document.createElement("button");
+
+    bb.type = "button";
     bb.textContent = v;
 
-    bb.onclick = ()=>{
+    bb.addEventListener("pointerup", function(e){
+
+      e.preventDefault();
+
       inputB.push(v);
+
       renderInput();
-    };
+
+    });
 
     bankerBox.appendChild(bb);
 
